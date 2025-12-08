@@ -18,6 +18,7 @@
         }
     ],
     "background": {
-        "service_worker": "dist/background.js"
+        "service_worker": "dist/background.js",
+        "type": "module"
     }
 }
