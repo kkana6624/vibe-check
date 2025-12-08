@@ -1,62 +1,134 @@
 "use strict";
 // src/content.ts
+// --- キャッシュ用変数 ---
+// key: tweetId, value: { isBad: boolean, reason: string }
+// これにより、一度判定したツイートは二度とAPIに投げず、結果だけ即座に適用します
+const vibeCache = new Map();
 const TWEET_SELECTOR = 'article[data-testid="tweet"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 /**
- * ボタンを作成してツイートに追加する関数
+ * ツイート要素からユニークなID (status id) を抽出する関数
+ * ツイートの日付リンク (例: /username/status/123456789) を探します
  */
-const addBlockButton = (article) => {
-    // ボタン要素を作成
-    const button = document.createElement('button');
-    button.innerText = '🚫'; // アイコン（後でカッコよくしましょう）
-    button.title = 'VibeCheck Block'; // ホバー時のテキスト
-    // スタイル適用（暫定的にインラインスタイルで絶対配置）
-    Object.assign(button.style, {
+const getTweetId = (article) => {
+    // リンクの中に "/status/" を含むものを探す
+    const timeLink = article.querySelector('a[href*="/status/"]');
+    if (!timeLink)
+        return null;
+    const href = timeLink.getAttribute('href');
+    if (!href)
+        return null;
+    // URL末尾の数字列をIDとして抽出
+    const match = href.match(/\/status\/(\d+)/);
+    return match ? match[1] : null;
+};
+/**
+ * ブロック処理（完全隠蔽・カーテン方式）
+ */
+const applyBlockStyle = (article, reason) => {
+    // 既にブロック済みなら何もしない
+    if (article.dataset.vibeBlocked === 'true')
+        return;
+    article.dataset.vibeBlocked = 'true';
+    // 1. 親要素のスタイル調整（オーバーレイの基準位置にするため）
+    article.style.position = 'relative';
+    article.style.overflow = 'hidden'; // 角丸からはみ出ないように
+    // 2. カーテン（オーバーレイ）要素の作成
+    const curtain = document.createElement('div');
+    // カーテンのスタイル（真っ黒に塗りつぶす設定）
+    Object.assign(curtain.style, {
         position: 'absolute',
-        top: '5px',
-        right: '5px',
-        zIndex: '9999',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        border: 'none',
-        borderRadius: '4px',
-        cursor: 'pointer',
-        color: 'white',
-        padding: '2px 6px',
-        fontSize: '12px',
-        fontWeight: 'bold',
+        top: '0',
+        left: '0',
+        width: '100%',
+        height: '100%',
+        backgroundColor: '#000000', // 完全な黒
+        zIndex: '10', // 元のコンテンツより上に表示
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer', // クリックできることを示唆
+        padding: '20px',
+        boxSizing: 'border-box',
+        fontFamily: 'sans-serif' // Xのフォントに依存しない
     });
-    // クリックイベント（仮実装）
-    button.onclick = (e) => {
-        e.stopPropagation(); // ツイート自体のクリック（詳細表示）を防ぐ
+    // 3. カーテンの中に表示するメッセージ
+    curtain.innerHTML = `
+    <div style="font-size: 24px; margin-bottom: 8px;">🚫 Restricted</div>
+    <div style="font-size: 12px; color: #888;">[AI Reason] ${reason}</div>
+    <div style="font-size: 10px; color: #444; margin-top: 12px;">(Click to reveal)</div>
+  `;
+    // 4. クリックしたら元に戻す（誤検知確認用）
+    curtain.onclick = (e) => {
+        e.stopPropagation(); // ツイート自体のクリックイベントを止める
         e.preventDefault();
-        // とりあえず画面から消すデモ
-        const confirmBlock = confirm('このツイートをVibeCheckしますか？\n（現時点では画面から消えるだけです）');
-        if (confirmBlock) {
-            article.style.display = 'none';
-            console.log('🚮 Manually removed tweet.');
+        if (confirm('ブロックを一時的に解除して表示しますか？')) {
+            curtain.remove(); // 幕を取り払う
+            // 再度ブロックされないようにキャッシュを更新する処理が必要ならここで行う
+            // 今回は一時的な解除なので、スクロールして戻ってきたらまたブロックされます
         }
     };
-    // ツイート要素自体に position: relative を設定しないと、
-    // 絶対配置(absolute)の基準がズレるため設定
-    // ※既存のスタイルを壊さないよう注意が必要ですが、articleなら概ね大丈夫です
-    article.style.position = 'relative';
-    // DOMに追加
-    article.appendChild(button);
+    // 5. DOMに追加
+    article.appendChild(curtain);
 };
-const processTweet = (article) => {
-    if (article.dataset.vibeChecked)
+const processTweet = async (article) => {
+    // 1. ツイートIDを取得
+    const tweetId = getTweetId(article);
+    if (!tweetId)
+        return; // IDが取れない（プロモツイートなど特殊な構造）場合は無視
+    // 2. キャッシュチェック
+    if (vibeCache.has(tweetId)) {
+        const cachedResult = vibeCache.get(tweetId);
+        if (cachedResult.isBad && cachedResult.reason) {
+            // 以前「黒」と判定されたやつが再レンダリングされた場合 → 即座に隠す
+            applyBlockStyle(article, cachedResult.reason);
+        }
+        // 判定済み（白または黒）なので、APIリクエストは送らず終了
         return;
-    article.dataset.vibeChecked = 'true';
+    }
+    // --- ここから初見のツイートに対する処理 ---
+    // 処理中フラグ（API多重送信防止）
+    if (article.dataset.processing === 'true')
+        return;
+    article.dataset.processing = 'true';
     const textElement = article.querySelector(TWEET_TEXT_SELECTOR);
-    // ボタンを追加（ここを追加！）
-    addBlockButton(article);
-    if (textElement) {
-        const text = textElement.innerText;
-        // ログは少し静かにしておきます
-        // console.log('VibeCheck scanning:', text.substring(0, 10) + '...');
+    if (!textElement)
+        return;
+    const text = textElement.innerText;
+    // 短すぎるツイートはAPI節約のためスキップ（キャッシュには「白」として登録しておく）
+    if (text.length < 5) {
+        vibeCache.set(tweetId, { isBad: false });
+        return;
+    }
+    // 解析中...
+    article.style.opacity = '0.7';
+    try {
+        const response = await chrome.runtime.sendMessage({
+            action: 'CHECK_VIBE',
+            text: text
+        }); // ※型定義のエラーが出る場合は as any で回避可
+        // 3. 結果をキャッシュに保存
+        vibeCache.set(tweetId, {
+            isBad: response.isBadVibe,
+            reason: response.reason
+        });
+        // 4. 結果の適用
+        article.style.opacity = '1.0';
+        delete article.dataset.processing;
+        if (response.isBadVibe) {
+            console.log(`💀 Blocked: ${text.substring(0, 15)}...`);
+            applyBlockStyle(article, response.reason || 'Detected by AI');
+        }
+    }
+    catch (err) {
+        // エラー時はとりあえずスルー
+        console.error(err);
+        article.style.opacity = '1.0';
+        delete article.dataset.processing;
     }
 };
-// --- 以下、MutationObserverは前回と同じ ---
+// --- MutationObserver (変更なし) ---
 const observerCallback = (mutations) => {
     mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
