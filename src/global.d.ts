@@ -1,10 +1,9 @@
-// src/types.ts
-export type VibeCheckRequest = {
+type VibeCheckRequest = {
   action: 'CHECK_VIBE';
   text: string;
 };
 
-export type VibeCheckResponse = {
+type VibeCheckResponse = {
   isBadVibe: boolean;
   reason?: string;
   error?: string;

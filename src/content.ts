@@ -1,6 +1,3 @@
-// src/content.ts
-import { VibeCheckRequest, VibeCheckResponse } from './types';
-
 const TWEET_SELECTOR = 'article[data-testid="tweet"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 

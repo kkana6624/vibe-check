@@ -1,3 +1,4 @@
+"use strict";
 const TWEET_SELECTOR = 'article[data-testid="tweet"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 const processTweet = async (article) => {
@@ -49,4 +50,3 @@ const observerCallback = (mutations) => {
 };
 const observer = new MutationObserver(observerCallback);
 observer.observe(document.body, { childList: true, subtree: true });
-export {};

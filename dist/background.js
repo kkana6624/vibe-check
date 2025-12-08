@@ -1,6 +1,7 @@
+"use strict";
 // ★ここにGoogle AI Studioで取得したキーを入れてください
 // ※注意: git等にコミットしないよう、本来は環境変数や別ファイル管理が推奨です
-const GEMINI_API_KEY = "YOUR_GEMINI_API_KEY_HERE";
+const GEMINI_API_KEY = "";
 // モデルを 'gemini-2.5-flash' に指定
 const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -64,4 +65,3 @@ async function checkVibeWithGemini(text) {
     }
 }
 console.log("VibeCheck Background Service (Gemini 2.5 Flash) Started.");
-export {};
