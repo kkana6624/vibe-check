@@ -1,0 +1,23 @@
+{
+    "manifest_version": 3,
+    "name": "VibeCheck",
+    "version": "0.0.1",
+    "description": "AI-powered vibe check for your timeline.",
+    "permissions": [
+        "storage"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://twitter.com/*",
+                "https://x.com/*"
+            ],
+            "js": [
+                "dist/content.js"
+            ]
+        }
+    ],
+    "background": {
+        "service_worker": "dist/background.js"
+    }
+}
