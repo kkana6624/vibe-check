@@ -1,163 +1,204 @@
 // src/content.ts
 
-// --- キャッシュ用変数 ---
-// key: tweetId, value: { isBad: boolean, reason: string }
-// これにより、一度判定したツイートは二度とAPIに投げず、結果だけ即座に適用します
+// --- キャッシュ ---
 const vibeCache = new Map<string, { isBad: boolean, reason?: string }>();
 
 const TWEET_SELECTOR = 'article[data-testid="tweet"]';
 const TWEET_TEXT_SELECTOR = 'div[data-testid="tweetText"]';
 
 /**
- * ツイート要素からユニークなID (status id) を抽出する関数
- * ツイートの日付リンク (例: /username/status/123456789) を探します
+ * ツイートID抽出
  */
 const getTweetId = (article: HTMLElement): string | null => {
-  // リンクの中に "/status/" を含むものを探す
   const timeLink = article.querySelector('a[href*="/status/"]');
   if (!timeLink) return null;
-
   const href = timeLink.getAttribute('href');
   if (!href) return null;
-
-  // URL末尾の数字列をIDとして抽出
   const match = href.match(/\/status\/(\d+)/);
   return match ? match[1] : null;
 };
 
 /**
- * ブロック処理（完全隠蔽・カーテン方式）
+ * 【Step 1】解析中（Scanning）のオーバーレイを被せる
+ * これにより、初期状態でポストの内容を隠蔽します
+ */
+const applyScanningStyle = (article: HTMLElement) => {
+  if (article.dataset.vibeStatus === 'scanning') return;
+  article.dataset.vibeStatus = 'scanning';
+
+  // 1. レイアウト崩れを防ぐため、要素の高さは維持しつつ中身を見えなくする
+  article.style.position = 'relative';
+  
+  // 2. 解析中オーバーレイを作成
+  const scanCurtain = document.createElement('div');
+  scanCurtain.className = 'vibe-scan-curtain'; // 後で削除しやすいようにクラス付与
+  
+  Object.assign(scanCurtain.style, {
+    position: 'absolute',
+    top: '0',
+    left: '0',
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)', // ほぼ不透明な白（ダークモードなら黒系に調整）
+    zIndex: '50', // コンテンツより上
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backdropFilter: 'blur(4px)', // すりガラス効果
+    color: '#888',
+    fontSize: '14px',
+    fontWeight: 'bold',
+  });
+
+  // ダークモード対応（簡易的）: 背景色が黒っぽいならオーバーレイも黒くする
+  const bgColor = window.getComputedStyle(document.body).backgroundColor;
+  if (bgColor.includes('0, 0, 0') || bgColor.match(/rgb\(\s*21/)) { // Xのダークモード色判定
+     scanCurtain.style.backgroundColor = 'rgba(0, 0, 0, 0.95)';
+  }
+
+  scanCurtain.innerText = '🔍 VibeCheck Scanning...';
+  
+  article.appendChild(scanCurtain);
+};
+
+/**
+ * 【Step 2-A】安全な場合：オーバーレイを削除して表示
+ */
+const revealContent = (article: HTMLElement) => {
+  article.dataset.vibeStatus = 'allowed';
+  
+  // Scanningカーテンを探して削除
+  const curtain = article.querySelector('.vibe-scan-curtain');
+  if (curtain) {
+    curtain.remove();
+  }
+};
+
+/**
+ * 【Step 2-B】アウトな場合：ブロック表示（黒塗り）に差し替え
  */
 const applyBlockStyle = (article: HTMLElement, reason: string) => {
-  // 既にブロック済みなら何もしない
-  if (article.dataset.vibeBlocked === 'true') return;
-  article.dataset.vibeBlocked = 'true';
+  article.dataset.vibeStatus = 'blocked';
 
-  // 1. 親要素のスタイル調整（オーバーレイの基準位置にするため）
-  article.style.position = 'relative';
-  article.style.overflow = 'hidden'; // 角丸からはみ出ないように
+  // Scanningカーテンがあれば削除
+  const scanCurtain = article.querySelector('.vibe-scan-curtain');
+  if (scanCurtain) scanCurtain.remove();
 
-  // 2. カーテン（オーバーレイ）要素の作成
-  const curtain = document.createElement('div');
+  // ブロック用オーバーレイを作成
+  const blockCurtain = document.createElement('div');
   
-  // カーテンのスタイル（真っ黒に塗りつぶす設定）
-  Object.assign(curtain.style, {
+  Object.assign(blockCurtain.style, {
     position: 'absolute',
     top: '0',
     left: '0',
     width: '100%',
     height: '100%',
     backgroundColor: '#000000', // 完全な黒
-    zIndex: '10', // 元のコンテンツより上に表示
+    zIndex: '100',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer', // クリックできることを示唆
+    cursor: 'pointer',
     padding: '20px',
     boxSizing: 'border-box',
-    fontFamily: 'sans-serif' // Xのフォントに依存しない
   });
 
-  // 3. カーテンの中に表示するメッセージ
-  curtain.innerHTML = `
+  blockCurtain.innerHTML = `
     <div style="font-size: 24px; margin-bottom: 8px;">🚫 Restricted</div>
-    <div style="font-size: 12px; color: #888;">[AI Reason] ${reason}</div>
+    <div style="font-size: 12px; color: #888;">[Reason] ${reason}</div>
     <div style="font-size: 10px; color: #444; margin-top: 12px;">(Click to reveal)</div>
   `;
 
-  // 4. クリックしたら元に戻す（誤検知確認用）
-  curtain.onclick = (e) => {
-    e.stopPropagation(); // ツイート自体のクリックイベントを止める
-    e.preventDefault();
-    if (confirm('ブロックを一時的に解除して表示しますか？')) {
-      curtain.remove(); // 幕を取り払う
-      // 再度ブロックされないようにキャッシュを更新する処理が必要ならここで行う
-      // 今回は一時的な解除なので、スクロールして戻ってきたらまたブロックされます
+  blockCurtain.onclick = (e) => {
+    e.stopPropagation();
+    if (confirm('一時的に表示しますか？')) {
+      blockCurtain.remove();
     }
   };
 
-  // 5. DOMに追加
-  article.appendChild(curtain);
+  article.appendChild(blockCurtain);
 };
 
+/**
+ * メイン処理フロー
+ */
 const processTweet = async (article: HTMLElement) => {
-  // 1. ツイートIDを取得
-  const tweetId = getTweetId(article);
-  if (!tweetId) return; // IDが取れない（プロモツイートなど特殊な構造）場合は無視
+  // まだ何もしていない新規ツイートのみ対象
+  if (article.dataset.vibeStatus) return;
 
-  // 2. キャッシュチェック
-  if (vibeCache.has(tweetId)) {
-    const cachedResult = vibeCache.get(tweetId)!;
-    if (cachedResult.isBad && cachedResult.reason) {
-      // 以前「黒」と判定されたやつが再レンダリングされた場合 → 即座に隠す
-      applyBlockStyle(article, cachedResult.reason);
-    }
-    // 判定済み（白または黒）なので、APIリクエストは送らず終了
+  // 1. 【即時実行】まずは隠す（Default Deny）
+  applyScanningStyle(article);
+
+  const tweetId = getTweetId(article);
+  if (!tweetId) {
+    // IDが取れない（プロモ等）はとりあえず通す（または隠し続ける）
+    // 今回は安全側に倒して通します
+    revealContent(article);
     return;
   }
 
-  // --- ここから初見のツイートに対する処理 ---
+  // 2. キャッシュ確認
+  if (vibeCache.has(tweetId)) {
+    const cached = vibeCache.get(tweetId)!;
+    if (cached.isBad) {
+      applyBlockStyle(article, cached.reason || 'Blocked');
+    } else {
+      revealContent(article);
+    }
+    return;
+  }
 
-  // 処理中フラグ（API多重送信防止）
-  if (article.dataset.processing === 'true') return;
-  article.dataset.processing = 'true';
-
+  // 3. テキスト取得
   const textElement = article.querySelector(TWEET_TEXT_SELECTOR) as HTMLElement | null;
-  if (!textElement) return;
+  const text = textElement ? textElement.innerText : '';
 
-  const text = textElement.innerText;
-  
-  // 短すぎるツイートはAPI節約のためスキップ（キャッシュには「白」として登録しておく）
+  // テキストが無い、または短すぎる場合はスルー（画像を考慮するならここは要調整）
   if (text.length < 5) {
     vibeCache.set(tweetId, { isBad: false });
+    revealContent(article);
     return;
   }
 
-  // 解析中...
-  article.style.opacity = '0.7';
-
+  // 4. API判定（非同期）
   try {
     const response = await chrome.runtime.sendMessage({
       action: 'CHECK_VIBE',
       text: text
-    } as VibeCheckRequest) as VibeCheckResponse; // ※型定義のエラーが出る場合は as any で回避可
+    }) as any; // 型定義は適宜
 
-    // 3. 結果をキャッシュに保存
+    // 結果をキャッシュ
     vibeCache.set(tweetId, {
       isBad: response.isBadVibe,
       reason: response.reason
     });
 
-    // 4. 結果の適用
-    article.style.opacity = '1.0';
-    delete article.dataset.processing;
-
+    // 5. 結果適用
     if (response.isBadVibe) {
       console.log(`💀 Blocked: ${text.substring(0, 15)}...`);
-      applyBlockStyle(article, response.reason || 'Detected by AI');
+      applyBlockStyle(article, response.reason);
+    } else {
+      revealContent(article);
     }
 
   } catch (err) {
-    // エラー時はとりあえずスルー
-    console.error(err);
-    article.style.opacity = '1.0';
-    delete article.dataset.processing;
+    console.error('Check failed:', err);
+    // エラー時はFail Open（表示する）かFail Close（隠し続ける）か
+    // ここではユーザビリティ優先で表示します
+    revealContent(article);
   }
 };
 
-// --- MutationObserver (変更なし) ---
-const observerCallback: MutationCallback = (mutations) => {
+// --- Observer ---
+const observer = new MutationObserver((mutations) => {
   mutations.forEach((mutation) => {
     mutation.addedNodes.forEach((node) => {
       if (node instanceof HTMLElement) {
         if (node.matches(TWEET_SELECTOR)) processTweet(node);
-        const nestedTweets = node.querySelectorAll(TWEET_SELECTOR);
-        nestedTweets.forEach((t) => processTweet(t as HTMLElement));
+        node.querySelectorAll(TWEET_SELECTOR).forEach((t) => processTweet(t as HTMLElement));
       }
     });
   });
-};
+});
 
-const observer = new MutationObserver(observerCallback);
 observer.observe(document.body, { childList: true, subtree: true });
