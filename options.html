@@ -1,93 +1,170 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-    <meta charset="UTF-8">
-    <title>VibeCheck Configuration</title>
-    <style>
-        body {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            font-family: Consolas, 'Courier New', monospace;
-            padding: 20px;
-            width: 400px;
-        }
+  <meta charset="UTF-8">
+  <title>VibeCheck Configuration</title>
+  <style>
+    body {
+      background-color: #1e1e1e;
+      color: #d4d4d4;
+      font-family: 'Segoe UI', Consolas, 'Courier New', monospace;
+      margin: 0;
+      padding: 40px 20px;
+      min-height: 100vh;
+      box-sizing: border-box;
+    }
 
-        h2 {
-            border-bottom: 1px solid #333;
-            padding-bottom: 10px;
-        }
+    /* コンテンツを中央寄せにするコンテナ */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
 
-        label {
-            display: block;
-            margin-top: 15px;
-            font-weight: bold;
-            color: #9cdcfe;
-        }
+    h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #3e3e42;
+      padding-bottom: 15px;
+      margin-bottom: 30px;
+      color: #4ec9b0;
+      font-size: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    /* セクションごとのスタイル */
+    .section {
+      background-color: #252526;
+      padding: 24px;
+      border-radius: 8px;
+      margin-bottom: 24px;
+      border: 1px solid #3e3e42;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: bold;
+      color: #9cdcfe;
+      font-size: 15px;
+    }
+    
+    /* 入力フォーム共通スタイル */
+    input[type="text"], input[type="password"], textarea, select {
+      width: 100%;
+      background-color: #1e1e1e;
+      border: 1px solid #3c3c3c;
+      color: #d4d4d4;
+      padding: 12px;
+      box-sizing: border-box;
+      font-family: inherit;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+    
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #0e639c;
+    }
 
-        input[type="text"],
-        input[type="password"],
-        textarea {
-            width: 100%;
-            background-color: #252526;
-            border: 1px solid #3c3c3c;
-            color: #d4d4d4;
-            padding: 8px;
-            margin-top: 5px;
-            box-sizing: border-box;
-            font-family: inherit;
-        }
+    /* 各入力欄の高さ調整 */
+    #badExamples { height: 150px; }
+    #trustedUsers { height: 100px; }
 
-        textarea {
-            height: 120px;
-            resize: vertical;
-        }
-
-        button {
-            margin-top: 20px;
-            width: 100%;
-            padding: 10px;
-            background-color: #0e639c;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        button:hover {
-            background-color: #1177bb;
-        }
-
-        #status {
-            margin-top: 10px;
-            color: #4ec9b0;
-            height: 20px;
-            font-size: 0.9em;
-        }
-
-        .note {
-            font-size: 0.8em;
-            color: #808080;
-            margin-top: 4px;
-        }
-    </style>
+    /* チェックボックス */
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    input[type="checkbox"] {
+      transform: scale(1.3);
+      margin-right: 12px;
+      cursor: pointer;
+      width: auto; /* width:100%の上書き */
+    }
+    
+    /* 保存ボタン */
+    button {
+      width: 100%;
+      padding: 14px;
+      background-color: #0e639c;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 16px;
+      transition: background 0.2s;
+      margin-top: 10px;
+    }
+    button:hover { background-color: #1177bb; }
+    
+    /* ステータスメッセージ */
+    #status {
+      margin-top: 15px;
+      color: #4ec9b0;
+      text-align: center;
+      height: 20px;
+      font-weight: bold;
+      font-size: 15px;
+    }
+    
+    /* 注釈テキスト */
+    .note {
+      font-size: 0.9em;
+      color: #858585;
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+  </style>
 </head>
-
 <body>
-    <h2>⚙️ VibeCheck Config</h2>
+  
+  <div class="container">
+    <h2>⚡ VibeCheck Config</h2>
 
-    <label for="apiKey">Gemini API Key</label>
-    <input type="password" id="apiKey" placeholder="AIzaSy...">
-    <div class="note">Google AI Studio API Key</div>
+    <div class="section">
+      <div class="checkbox-group">
+        <input type="checkbox" id="blockAds">
+        <label for="blockAds" style="margin:0; color:#d4d4d4; cursor:pointer;">Block Promotions (Ads)</label>
+      </div>
+      <div class="note">Enable this to automatically hide promoted tweets without consuming AI tokens.</div>
+    </div>
 
-    <label for="systemPrompt">System Prompt (Criteria)</label>
-    <textarea id="systemPrompt" placeholder="Define what constitutes a 'Bad Vibe' here..."></textarea>
-    <div class="note">Leave empty to use default logic.</div>
+    <div class="section">
+      <label for="apiKey">Gemini API Key</label>
+      <input type="password" id="apiKey" placeholder="AIzaSy...">
+      
+      <div style="margin-top: 20px;">
+        <label for="promptMode">Filtering Mode</label>
+        <select id="promptMode">
+          <option value="standard">Standard (Hate, Toxicity, Spam)</option>
+          <option value="strict">Strict (High sensitivity)</option>
+          <option value="politics">Focus on Politics (Hide political debates)</option>
+        </select>
+        <div class="note">Select the behavior criteria. The JSON output format is handled automatically to prevent errors.</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <label for="badExamples">Learned Bad Examples (One per line)</label>
+      <textarea id="badExamples" placeholder="Tweets registered via 'Learn' button appear here..."></textarea>
+      <div class="note">These examples are dynamically injected into the AI prompt for Few-Shot Learning to improve accuracy.</div>
+    </div>
+
+    <div class="section">
+      <label for="trustedUsers">Trusted Users (Whitelist)</label>
+      <textarea id="trustedUsers" placeholder="@username (one per line)"></textarea>
+      <div class="note">Posts from these users will skip the scan and show immediately.</div>
+    </div>
 
     <button id="saveBtn">Save Configuration</button>
     <div id="status"></div>
+  </div>
 
-    <script src="dist/options.js"></script>
+  <script src="dist/options.js"></script>
 </body>
-
 </html>
