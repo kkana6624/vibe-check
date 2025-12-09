@@ -19,6 +19,7 @@ VibeCheck は、Google Gemini AI (Flash Model) を活用して X (旧Twitter) �
 ### 1. 前提条件
 * Node.js (v18以上推奨)
 * npm (Node.jsに同梱)
+* WSL
 
 ### 2. リポジトリのクローンと依存関係のインストール
 
