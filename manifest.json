@@ -1,11 +1,15 @@
 {
     "manifest_version": 3,
     "name": "VibeCheck",
-    "version": "0.0.1",
+    "version": "0.0.2",
     "description": "AI-powered vibe check for your timeline.",
     "permissions": [
         "storage"
     ],
+    "options_ui": {
+        "page": "options.html",
+        "open_in_tab": false
+    },
     "content_scripts": [
         {
             "matches": [
